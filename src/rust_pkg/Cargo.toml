@@ -2,3 +2,45 @@
 name = "rust_pkg"
 version = "0.1.0"
 edition = "2021"
+
+[[bin]]
+name = "topic_pub"
+path = "src/bin/topic_publisher.rs"
+
+[[bin]]
+name = "topic_sub"
+path = "src/bin/topic_subscriber.rs"
+
+[[bin]]
+name = "service_server"
+path = "src/bin/service_server.rs"
+
+[[bin]]
+name = "service_client"
+path = "src/bin/service_client.rs"
+
+[[bin]]
+name = "action_server"
+path = "src/bin/action_server.rs"
+
+[[bin]]
+name = "action_client"
+path = "src/bin/action_client.rs"
+
+[[bin]]
+name = "param_node"
+path = "src/bin/param_node.rs"
+
+[[bin]]
+name = "benchmark_node"
+path = "src/bin/benchmark_node.rs"
+
+[dependencies]
+anyhow = { version = "1", features = ["backtrace"] }
+rclrs = "0.7"
+example_interfaces = "*"
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "time", "sync"] }
+futures = "0.3"
+serde_json = "1"
+
+backtrace = "=0.3.74"

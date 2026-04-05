@@ -95,11 +95,31 @@ deps-update: ## 更新所有 vcs 管理的仓库
 git-tool: ## 启动 Git 交互式管理工具
 	./scripts/git-tool.sh
 
+# ── Benchmark ────────────────────────────────────────────
+.PHONY: benchmark
+benchmark: ## 运行三语言 Benchmark (需先 build)
+	source /opt/ros/$(ROS_DISTRO)/setup.bash && \
+	source install/setup.bash && \
+	python3 benchmarks/run_benchmark.py --skip-build-time
+
+.PHONY: benchmark-full
+benchmark-full: ## 运行完整 Benchmark (含编译时间测量)
+	source /opt/ros/$(ROS_DISTRO)/setup.bash && \
+	source install/setup.bash && \
+	python3 benchmarks/run_benchmark.py
+
+.PHONY: benchmark-quick
+benchmark-quick: ## 快速 Benchmark (减少迭代次数)
+	source /opt/ros/$(ROS_DISTRO)/setup.bash && \
+	source install/setup.bash && \
+	python3 benchmarks/run_benchmark.py --skip-build-time \
+		--topic-iters=500 --service-iters=200 --param-iters=10000
+
 # ── 代码质量 ─────────────────────────────────────────────
 .PHONY: lint
 lint: ## 运行代码格式检查
 	@echo "── Python ──"
-	cd src/py_pkg && python3 -m flake8 src/ tests/ || true
+	cd src/py_pkg && python3 -m flake8 py_pkg/ tests/ || true
 	@echo "── Rust ──"
 	cd src/rust_pkg && cargo fmt --check || true
 	cd src/rust_pkg && cargo clippy || true
@@ -111,7 +131,7 @@ lint: ## 运行代码格式检查
 .PHONY: fmt
 fmt: ## 自动格式化代码
 	@echo "── Python ──"
-	cd src/py_pkg && python3 -m black src/ tests/ 2>/dev/null || echo "  black 未安装，跳过"
+	cd src/py_pkg && python3 -m black py_pkg/ tests/ 2>/dev/null || echo "  black 未安装，跳过"
 	@echo "── Rust ──"
 	cd src/rust_pkg && cargo fmt || true
 	@echo "── C++ ──"

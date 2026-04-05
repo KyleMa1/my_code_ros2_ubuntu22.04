@@ -1,0 +1,182 @@
+{
+  "cpp": {
+    "language": "cpp",
+    "topic": {
+      "avg_us": 19.4071,
+      "min_us": 11.872,
+      "max_us": 387.05,
+      "p50_us": 16.621,
+      "p95_us": 34.431,
+      "p99_us": 75.985,
+      "throughput": 6383.04
+    },
+    "service": {
+      "avg_us": 35.0363,
+      "min_us": 29.682,
+      "max_us": 119.914,
+      "p50_us": 33.244,
+      "p95_us": 43.929,
+      "p99_us": 70.049,
+      "throughput": 27236.7
+    },
+    "action": {
+      "total_us": 617,
+      "feedback_count": 10,
+      "fib_order": 20
+    },
+    "param": {
+      "write_ops_per_sec": 130793,
+      "read_ops_per_sec": 7311360.0,
+      "iterations": 10000
+    },
+    "concurrency": {
+      "thread_count": 4,
+      "topic_multi_pub": {
+        "total_sent": 2000,
+        "total_received": 2000,
+        "elapsed_s": 0.30331,
+        "aggregate_throughput": 6593.92,
+        "avg_latency_us": 11845.6
+      },
+      "service_concurrent": {
+        "total_calls": 400,
+        "elapsed_s": 0.0153775,
+        "aggregate_throughput": 26012,
+        "avg_latency_us": 150.632
+      },
+      "param_concurrent_rw": {
+        "total_ops": 40000,
+        "elapsed_s": 0.177763,
+        "aggregate_throughput": 225019
+      }
+    },
+    "wall_time_s": 0.823,
+    "meta": {
+      "source_lines": 732,
+      "source_files": 9,
+      "binary_size": 10907040,
+      "wall_time_s": 0.823,
+      "build_time_s": "skipped"
+    }
+  },
+  "python": {
+    "language": "python",
+    "topic": {
+      "avg_us": 11315.373767272727,
+      "min_us": 210.147,
+      "max_us": 13747.404,
+      "p50_us": 12170.709,
+      "p95_us": 13661.921,
+      "p99_us": 13717.723,
+      "throughput": 4217.461698782406
+    },
+    "service": {
+      "avg_us": 210.315456,
+      "min_us": 182.839,
+      "max_us": 422.668,
+      "p50_us": 204.21,
+      "p95_us": 249.326,
+      "p99_us": 277.821,
+      "throughput": 4691.40530625028
+    },
+    "action": {
+      "total_us": 2234.443,
+      "feedback_count": 3,
+      "fib_order": 20
+    },
+    "param": {
+      "write_ops_per_sec": 17533.147118109,
+      "read_ops_per_sec": 3327756.2678514756,
+      "iterations": 10000
+    },
+    "concurrency": {
+      "thread_count": 4,
+      "topic_multi_pub": {
+        "total_sent": 2000,
+        "total_received": 1675,
+        "elapsed_s": 0.3169,
+        "aggregate_throughput": 5285.26,
+        "avg_latency_us": 158235.93
+      },
+      "service_concurrent": {
+        "total_calls": 400,
+        "elapsed_s": 0.1041,
+        "aggregate_throughput": 3842.02,
+        "avg_latency_us": 845.35
+      },
+      "param_concurrent_rw": {
+        "total_ops": 40000,
+        "elapsed_s": 1.3047,
+        "aggregate_throughput": 30657.46
+      }
+    },
+    "wall_time_s": 2.824,
+    "meta": {
+      "source_lines": 592,
+      "source_files": 8,
+      "binary_size": 7720,
+      "wall_time_s": 2.824,
+      "build_time_s": "skipped"
+    }
+  },
+  "rust": {
+    "action": {
+      "feedback_count": 5,
+      "fib_order": 20,
+      "total_us": 611.0
+    },
+    "concurrency": {
+      "param_concurrent_rw": {
+        "aggregate_throughput": 6719322.638523456,
+        "elapsed_s": 0.005952981,
+        "total_ops": 40000
+      },
+      "service_concurrent": {
+        "aggregate_throughput": 6.897424432053085,
+        "avg_latency_us": 145.34604347826087,
+        "elapsed_s": 10.003734101,
+        "total_calls": 69
+      },
+      "thread_count": 4,
+      "topic_multi_pub": {
+        "aggregate_throughput": 1444.012383496565,
+        "avg_latency_us": 63.08206122448979,
+        "elapsed_s": 0.508998405,
+        "total_received": 735,
+        "total_sent": 2000
+      }
+    },
+    "language": "rust",
+    "param": {
+      "iterations": 10000,
+      "read_ops_per_sec": 27982281.619278673,
+      "write_ops_per_sec": 21764017.115223058
+    },
+    "service": {
+      "avg_us": 108.438202,
+      "max_us": 2186.953,
+      "min_us": 74.798,
+      "p50_us": 91.42,
+      "p95_us": 169.78,
+      "p99_us": 226.768,
+      "throughput": 7679.600552642487
+    },
+    "topic": {
+      "avg_us": 76.254834,
+      "max_us": 268.323,
+      "min_us": 47.491,
+      "p50_us": 75.985,
+      "p95_us": 111.603,
+      "p99_us": 142.472,
+      "throughput": 4475.292296108324
+    },
+    "wall_time_s": 10.888,
+    "meta": {
+      "source_lines": 718,
+      "source_files": 8,
+      "binary_size": 338344808,
+      "wall_time_s": 10.888,
+      "build_time_s": "skipped"
+    }
+  }
+}
