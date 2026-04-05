@@ -4,8 +4,6 @@
 # 用法: ./git-tool.sh
 #
 
-set -eE
-trap 'echo -e "\n${RED}命令执行出错，已安全停止。${NC}"; return 2>/dev/null || true' ERR
 
 # ── 颜色定义 ─────────────────────────────────────────────
 RED='\033[0;31m'
@@ -17,7 +15,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # ── 配置 ─────────────────────────────────────────────────
-REMOTE_URL="https://github.com/KyleMa1/my_code_ros2_ubuntu22.04.git"
+REMOTE_URL="git@github.com:KyleMa1/my_code_ros2_ubuntu22.04.git"
 
 print_header() {
     echo ""
@@ -420,20 +418,20 @@ main() {
         print_menu
         read -rp "$(echo -e "${BOLD}请选择 [0-14]: ${NC}")" choice
         case ${choice} in
-            1)  do_push ;;
-            2)  do_switch_branch ;;
-            3)  do_pull ;;
-            4)  do_diff ;;
-            5)  do_diff_staged ;;
-            6)  do_log ;;
-            7)  do_diff_commits ;;
-            8)  do_restore ;;
-            9)  do_soft_reset ;;
-            10) do_hard_reset ;;
-            11) do_revert ;;
-            12) do_status ;;
-            13) do_stash_save ;;
-            14) do_stash_pop ;;
+            1)  do_push || echo -e "${RED}push 操作未完成。${NC}" ;;
+            2)  do_switch_branch || echo -e "${RED}分支操作未完成。${NC}" ;;
+            3)  do_pull || echo -e "${RED}pull 操作未完成。${NC}" ;;
+            4)  do_diff || true ;;
+            5)  do_diff_staged || true ;;
+            6)  do_log || true ;;
+            7)  do_diff_commits || true ;;
+            8)  do_restore || echo -e "${RED}还原操作未完成。${NC}" ;;
+            9)  do_soft_reset || echo -e "${RED}软回退操作未完成。${NC}" ;;
+            10) do_hard_reset || echo -e "${RED}硬回退操作未完成。${NC}" ;;
+            11) do_revert || echo -e "${RED}回滚操作未完成。${NC}" ;;
+            12) do_status || true ;;
+            13) do_stash_save || echo -e "${RED}stash 操作未完成。${NC}" ;;
+            14) do_stash_pop || echo -e "${RED}stash 恢复未完成。${NC}" ;;
             0)  echo -e "${GREEN}再见！${NC}"; exit 0 ;;
             *)  echo -e "${RED}无效选择，请重试。${NC}" ;;
         esac
