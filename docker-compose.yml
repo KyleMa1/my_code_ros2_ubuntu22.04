@@ -1,0 +1,35 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ROS_DISTRO: humble
+        RUST_VERSION: "1.85.0"
+    image: rust_ws:humble-dev
+    container_name: rust_ws_dev
+    volumes:
+      - .:/ws
+    network_mode: host
+    ipc: host
+    pid: host
+    stdin_open: true
+    tty: true
+    command: bash
+
+  build:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rust_ws:humble-dev
+    container_name: rust_ws_build
+    volumes:
+      - .:/ws
+    network_mode: host
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        colcon build --symlink-install &&
+        colcon test &&
+        colcon test-result --verbose
+      "

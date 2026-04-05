@@ -1,0 +1,17 @@
+# 示例参数文件 — 按实际节点配置修改
+#
+# 用法:
+#   ros2 run <pkg> <node> --ros-args --params-file configs/params/example_params.yaml
+
+/**:
+  ros__parameters:
+    use_sim_time: false
+
+/rust_publisher:
+  ros__parameters:
+    publish_rate: 10.0
+    topic_name: "/chatter"
+
+/rust_subscriber:
+  ros__parameters:
+    topic_name: "/chatter"

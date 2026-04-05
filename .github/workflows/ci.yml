@@ -1,0 +1,74 @@
+name: CI — Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  ROS_DISTRO: humble
+  RUST_VERSION: "1.85.0"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    container:
+      image: ros:humble
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          apt-get update && apt-get install -y \
+            curl git libclang-dev python3-pip python3-vcstool
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- --default-toolchain ${{ env.RUST_VERSION }} -y
+          echo "/root/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install colcon Cargo plugins
+        run: |
+          pip install --upgrade pytest
+          pip install \
+            git+https://github.com/colcon/colcon-cargo.git \
+            git+https://github.com/colcon/colcon-ros-cargo.git
+
+      - name: Build rosidl_rust overlay
+        run: |
+          mkdir -p /tmp/rosidl_rust_overlay/src
+          git clone https://github.com/ros2-rust/rosidl_rust \
+            /tmp/rosidl_rust_overlay/src
+          cd /tmp/rosidl_rust_overlay
+          . /opt/ros/${ROS_DISTRO}/setup.sh
+          colcon build
+
+      - name: Import ros2_rust dependencies
+        run: |
+          source /opt/ros/${ROS_DISTRO}/setup.bash
+          vcs import src < src/ros2_rust/ros2_rust_humble.repos
+
+      - name: Build workspace
+        run: |
+          source /opt/ros/${ROS_DISTRO}/setup.bash
+          source /tmp/rosidl_rust_overlay/install/setup.bash
+          colcon build --allow-overriding \
+            action_msgs builtin_interfaces common_interfaces \
+            composition_interfaces diagnostic_msgs example_interfaces \
+            geometry_msgs lifecycle_msgs nav_msgs rcl_interfaces \
+            rosgraph_msgs rosidl_default_generators rosidl_default_runtime \
+            sensor_msgs sensor_msgs_py shape_msgs statistics_msgs \
+            std_msgs std_srvs stereo_msgs test_msgs trajectory_msgs \
+            unique_identifier_msgs visualization_msgs
+
+      - name: Test workspace
+        run: |
+          source /opt/ros/${ROS_DISTRO}/setup.bash
+          source /tmp/rosidl_rust_overlay/install/setup.bash
+          source install/setup.bash
+          colcon test
+          colcon test-result --verbose

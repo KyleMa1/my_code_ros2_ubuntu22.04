@@ -1,0 +1,78 @@
+# ── colcon 构建产物 ───────────────────────────────────────
+build/
+install/
+log/
+
+# ── 第三方克隆仓库（vcs import 拉取，不纳入版本管理）────
+src/ros2/
+src/ros2-rust/
+src/ros2_rust/
+
+# ── C / C++ ──────────────────────────────────────────────
+*.o
+*.ko
+*.obj
+*.elf
+*.ilk
+*.map
+*.exp
+*.gch
+*.pch
+*.lib
+*.a
+*.la
+*.lo
+*.dll
+*.so
+*.so.*
+*.dylib
+*.exe
+*.out
+*.app
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# ── CMake ────────────────────────────────────────────────
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+*-prefix/
+
+# ── Python ───────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+.eggs/
+.venv/
+venv/
+.env
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── Rust ─────────────────────────────────────────────────
+/target/
+**/*.rs.bk
+**/.cargo/config.toml
+
+# ── IDE ──────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
