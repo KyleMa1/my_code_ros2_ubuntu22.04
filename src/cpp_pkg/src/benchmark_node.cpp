@@ -2,12 +2,15 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <mutex>
 #include <numeric>
+#include <sstream>
 #include <vector>
 #include <thread>
+#include <sys/resource.h>
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/executors/multi_threaded_executor.hpp"
@@ -19,6 +22,33 @@
 using namespace std::chrono;
 using Fibonacci = example_interfaces::action::Fibonacci;
 using GoalHandleFib = rclcpp_action::ServerGoalHandle<Fibonacci>;
+
+struct ResourceSnapshot {
+    long rss_kb = 0;
+    long peak_rss_kb = 0;
+    double cpu_user_ms = 0;
+    double cpu_system_ms = 0;
+};
+
+ResourceSnapshot get_resource_snapshot() {
+    ResourceSnapshot snap{};
+    std::ifstream status("/proc/self/status");
+    std::string line;
+    while (std::getline(status, line)) {
+        if (line.find("VmRSS:") == 0) {
+            std::istringstream iss(line.substr(6));
+            iss >> snap.rss_kb;
+        } else if (line.find("VmHWM:") == 0) {
+            std::istringstream iss(line.substr(6));
+            iss >> snap.peak_rss_kb;
+        }
+    }
+    struct rusage usage{};
+    getrusage(RUSAGE_SELF, &usage);
+    snap.cpu_user_ms = usage.ru_utime.tv_sec * 1000.0 + usage.ru_utime.tv_usec / 1000.0;
+    snap.cpu_system_ms = usage.ru_stime.tv_sec * 1000.0 + usage.ru_stime.tv_usec / 1000.0;
+    return snap;
+}
 
 struct Stats {
     double avg_ns;
@@ -519,6 +549,7 @@ void benchmark_multi_node(int num_threads, int msgs_per_thread, int calls_per_th
 
 int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
+    auto baseline = get_resource_snapshot();
 
     int topic_iters = 5000;
     int service_iters = 2000;
@@ -569,7 +600,17 @@ int main(int argc, char* argv[]) {
     std::cout << "," << std::endl;
 
     benchmark_multi_node(conc_threads, conc_msgs, conc_calls);
-    std::cout << std::endl;
+    std::cout << "," << std::endl;
+
+    auto end_snap = get_resource_snapshot();
+    std::cout << "  \"resource_usage\": {"
+              << "\"baseline_rss_kb\": " << baseline.rss_kb
+              << ", \"peak_rss_kb\": " << end_snap.peak_rss_kb
+              << ", \"final_rss_kb\": " << end_snap.rss_kb
+              << ", \"cpu_user_ms\": " << end_snap.cpu_user_ms
+              << ", \"cpu_system_ms\": " << end_snap.cpu_system_ms
+              << ", \"cpu_total_ms\": " << (end_snap.cpu_user_ms + end_snap.cpu_system_ms)
+              << "}" << std::endl;
 
     std::cout << "}" << std::endl;
     rclcpp::shutdown();

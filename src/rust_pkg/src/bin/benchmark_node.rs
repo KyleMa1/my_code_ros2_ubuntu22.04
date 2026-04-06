@@ -7,6 +7,43 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::unbounded_channel;
 
+fn get_resource_snapshot() -> serde_json::Value {
+    let mut rss_kb: i64 = 0;
+    let mut peak_rss_kb: i64 = 0;
+    if let Ok(content) = std::fs::read_to_string("/proc/self/status") {
+        for line in content.lines() {
+            if let Some(rest) = line.strip_prefix("VmRSS:") {
+                rss_kb = rest.trim().split_whitespace().next()
+                    .and_then(|s| s.parse().ok()).unwrap_or(0);
+            } else if let Some(rest) = line.strip_prefix("VmHWM:") {
+                peak_rss_kb = rest.trim().split_whitespace().next()
+                    .and_then(|s| s.parse().ok()).unwrap_or(0);
+            }
+        }
+    }
+
+    let (cpu_user_ms, cpu_system_ms) = parse_proc_stat_cpu();
+    serde_json::json!({
+        "rss_kb": rss_kb,
+        "peak_rss_kb": peak_rss_kb,
+        "cpu_user_ms": cpu_user_ms,
+        "cpu_system_ms": cpu_system_ms,
+    })
+}
+
+fn parse_proc_stat_cpu() -> (f64, f64) {
+    if let Ok(content) = std::fs::read_to_string("/proc/self/stat") {
+        if let Some(end_paren) = content.rfind(')') {
+            let fields: Vec<&str> = content[end_paren + 2..].split_whitespace().collect();
+            let ticks_per_sec = 100.0_f64;
+            let utime: f64 = fields.get(11).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+            let stime: f64 = fields.get(12).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+            return (utime / ticks_per_sec * 1000.0, stime / ticks_per_sec * 1000.0);
+        }
+    }
+    (0.0, 0.0)
+}
+
 fn now_ns() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -680,6 +717,8 @@ fn main() -> Result<()> {
         }
     }
 
+    let baseline = get_resource_snapshot();
+
     let mut results = serde_json::Map::new();
     results.insert("language".into(), serde_json::json!("rust"));
 
@@ -691,6 +730,21 @@ fn main() -> Result<()> {
         conc_threads, conc_msgs, conc_calls, conc_param_ops));
     results.insert("multi_node".into(), benchmark_multi_node(
         conc_threads, conc_msgs, conc_calls));
+
+    let end_snap = get_resource_snapshot();
+    let baseline_rss = baseline.get("rss_kb").and_then(|v| v.as_i64()).unwrap_or(0);
+    let peak_rss = end_snap.get("peak_rss_kb").and_then(|v| v.as_i64()).unwrap_or(0);
+    let final_rss = end_snap.get("rss_kb").and_then(|v| v.as_i64()).unwrap_or(0);
+    let cpu_user = end_snap.get("cpu_user_ms").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let cpu_sys = end_snap.get("cpu_system_ms").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    results.insert("resource_usage".into(), serde_json::json!({
+        "baseline_rss_kb": baseline_rss,
+        "peak_rss_kb": peak_rss,
+        "final_rss_kb": final_rss,
+        "cpu_user_ms": cpu_user,
+        "cpu_system_ms": cpu_sys,
+        "cpu_total_ms": cpu_user + cpu_sys,
+    }));
 
     println!("{}", serde_json::to_string_pretty(&serde_json::Value::Object(results))?);
     Ok(())

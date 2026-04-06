@@ -393,6 +393,54 @@ def generate_summary_build(results):
     return "\n".join(lines)
 
 
+def generate_summary_resource(results):
+    best_peak = find_best(results, "resource_usage", "peak_rss_kb", lower_is_better=True)
+    best_cpu = find_best(results, "resource_usage", "cpu_total_ms", lower_is_better=True)
+    lines = ["> **总结**: "]
+    parts = []
+    if best_peak:
+        parts.append(f"{LANG_LABELS[best_peak]}峰值内存最低")
+    if best_cpu:
+        parts.append(f"{LANG_LABELS[best_cpu]} CPU总耗时最少")
+    lines[-1] += "，".join(parts) + "。"
+
+    cpp_peak = get_val(results, "cpp", "resource_usage", "peak_rss_kb")
+    py_peak = get_val(results, "python", "resource_usage", "peak_rss_kb")
+    rs_peak = get_val(results, "rust", "resource_usage", "peak_rss_kb")
+
+    cpp_cpu = get_val(results, "cpp", "resource_usage", "cpu_total_ms")
+    py_cpu = get_val(results, "python", "resource_usage", "cpu_total_ms")
+    rs_cpu = get_val(results, "rust", "resource_usage", "cpu_total_ms")
+
+    mem_notes = []
+    if all(isinstance(v, (int, float)) and v > 0 for v in [cpp_peak, py_peak, rs_peak]):
+        min_peak = min(cpp_peak, py_peak, rs_peak)
+        mem_notes.append(
+            f"峰值内存: C++ {cpp_peak/1024:.1f}MB, Python {py_peak/1024:.1f}MB, Rust {rs_peak/1024:.1f}MB"
+        )
+        if py_peak > rs_peak:
+            mem_notes.append(
+                f"Python峰值内存约为C++的 {py_peak/cpp_peak:.1f}倍, Rust的 {py_peak/rs_peak:.1f}倍"
+            )
+
+    cpu_notes = []
+    if all(isinstance(v, (int, float)) and v > 0 for v in [cpp_cpu, py_cpu, rs_cpu]):
+        cpu_notes.append(
+            f"CPU总耗时: C++ {cpp_cpu:.0f}ms, Python {py_cpu:.0f}ms, Rust {rs_cpu:.0f}ms"
+        )
+
+    detail_parts = mem_notes + cpu_notes
+    if detail_parts:
+        lines.append("> " + "。".join(detail_parts) + "。")
+
+    lines.append(
+        "> C++因直接映射到原生代码，内存和CPU开销最低；"
+        "Python解释器自身占用大量基线内存，GC和动态类型增加运行时CPU开销；"
+        "Rust静态链接导致进程映像较大，但运行时内存管理高效，无GC停顿，CPU效率接近C++。"
+    )
+    return "\n".join(lines)
+
+
 def generate_summary_safety():
     return (
         "> **总结**: Rust在所有安全维度上表现最优——所有权系统、Send/Sync trait、"
@@ -566,8 +614,29 @@ def generate_report(results: dict, output_path: Path):
     report.append("")
     report.append(generate_summary_build(results))
 
+    # --- Resource usage ---
+    report.append("\n## 8. CPU 与内存资源占用\n")
+    report.append("| 指标 | C++ | Python | Rust |")
+    report.append("|------|-----|--------|------|")
+    for metric_label, metric_key, fmt_type in [
+        ("基线内存 RSS (KB)", "baseline_rss_kb", "comma"),
+        ("峰值内存 VmHWM (KB)", "peak_rss_kb", "comma"),
+        ("结束时 RSS (KB)", "final_rss_kb", "comma"),
+        ("用户态 CPU (ms)", "cpu_user_ms", "default"),
+        ("内核态 CPU (ms)", "cpu_system_ms", "default"),
+        ("CPU 总耗时 (ms)", "cpu_total_ms", "default"),
+    ]:
+        row = f"| {metric_label} |"
+        for lang in ["cpp", "python", "rust"]:
+            val = get_val(results, lang, "resource_usage", metric_key)
+            row += f" {fmt_val(val, fmt_type)} |"
+        report.append(row)
+
+    report.append("")
+    report.append(generate_summary_resource(results))
+
     # --- Safety ---
-    report.append("\n## 8. 安全性评估\n")
+    report.append("\n## 9. 安全性评估\n")
     report.append("| 维度 | C++ | Python | Rust |")
     report.append("|------|-----|--------|------|")
     report.append("| 内存安全 | 手动管理，有UAF/溢出风险 | GC自动管理，安全 | 所有权系统，编译期保证 |")

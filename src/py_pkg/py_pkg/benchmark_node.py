@@ -1,4 +1,6 @@
 import json
+import os
+import resource
 import sys
 import time
 import threading
@@ -13,6 +15,27 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from std_msgs.msg import String
 from example_interfaces.srv import AddTwoInts
 from example_interfaces.action import Fibonacci
+
+
+def get_resource_snapshot():
+    rss_kb = 0
+    peak_rss_kb = 0
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    rss_kb = int(line.split()[1])
+                elif line.startswith("VmHWM:"):
+                    peak_rss_kb = int(line.split()[1])
+    except OSError:
+        pass
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    return {
+        "rss_kb": rss_kb,
+        "peak_rss_kb": peak_rss_kb,
+        "cpu_user_ms": usage.ru_utime * 1000.0,
+        "cpu_system_ms": usage.ru_stime * 1000.0,
+    }
 
 
 def percentile(sorted_data, pct):
@@ -480,6 +503,7 @@ def benchmark_multi_node(num_threads, msgs_per_thread, calls_per_thread):
 
 def main(args=None):
     rclpy.init(args=args)
+    baseline = get_resource_snapshot()
 
     topic_iters = 5000
     service_iters = 2000
@@ -518,6 +542,16 @@ def main(args=None):
         conc_threads, conc_msgs, conc_calls, conc_param_ops)
     results["multi_node"] = benchmark_multi_node(
         conc_threads, conc_msgs, conc_calls)
+
+    end_snap = get_resource_snapshot()
+    results["resource_usage"] = {
+        "baseline_rss_kb": baseline["rss_kb"],
+        "peak_rss_kb": end_snap["peak_rss_kb"],
+        "final_rss_kb": end_snap["rss_kb"],
+        "cpu_user_ms": round(end_snap["cpu_user_ms"], 2),
+        "cpu_system_ms": round(end_snap["cpu_system_ms"], 2),
+        "cpu_total_ms": round(end_snap["cpu_user_ms"] + end_snap["cpu_system_ms"], 2),
+    }
 
     print(json.dumps(results, indent=2))
     rclpy.shutdown()
