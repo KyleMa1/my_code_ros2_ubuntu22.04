@@ -246,12 +246,13 @@ fn benchmark_concurrency(
         let mut executor = context.create_basic_executor();
         let node = executor.create_node("rust_bench_conc_topic").unwrap();
 
-        let latencies = Arc::new(Mutex::new(Vec::with_capacity(num_threads * msgs_per_thread)));
+        let total_msgs = num_threads * msgs_per_thread;
+        let latencies = Arc::new(Mutex::new(Vec::with_capacity(total_msgs)));
         let lat_clone = Arc::clone(&latencies);
 
         let _sub = node
             .create_subscription::<example_interfaces::msg::String, _>(
-                "bench_conc_topic_rust",
+                "bench_conc_topic_rust".keep_last(total_msgs as u32).reliable(),
                 move |msg: example_interfaces::msg::String| {
                     let recv_ns = now_ns();
                     if let Ok(sent_ns) = msg.data.parse::<i64>() {
@@ -262,8 +263,10 @@ fn benchmark_concurrency(
             .unwrap();
 
         let publisher = Arc::new(
-            node.create_publisher::<example_interfaces::msg::String>("bench_conc_topic_rust")
-                .unwrap(),
+            node.create_publisher::<example_interfaces::msg::String>(
+                "bench_conc_topic_rust".keep_last(total_msgs as u32).reliable(),
+            )
+            .unwrap(),
         );
 
         let stop = Arc::new(AtomicBool::new(false));
@@ -290,7 +293,14 @@ fn benchmark_concurrency(
         for h in handles {
             h.join().unwrap();
         }
-        std::thread::sleep(Duration::from_millis(500));
+        // Wait for subscriber to drain all buffered messages (up to 5s)
+        let drain_start = Instant::now();
+        while drain_start.elapsed() < Duration::from_secs(5) {
+            if latencies.lock().unwrap().len() >= total_msgs {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
         let elapsed_s = start.elapsed().as_secs_f64();
 
         stop.store(true, Ordering::Relaxed);
@@ -442,6 +452,204 @@ fn benchmark_concurrency(
     serde_json::Value::Object(conc)
 }
 
+fn benchmark_multi_node(
+    num_threads: usize,
+    msgs_per_thread: usize,
+    calls_per_thread: usize,
+) -> serde_json::Value {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    let mut mn = serde_json::Map::new();
+    mn.insert("thread_count".into(), serde_json::json!(num_threads));
+
+    // --- Multi-node topic: pub Context + sub Context (separate DDS participants) ---
+    // Publishing is thread-safe and doesn't need executor spinning, so pubs share one Context.
+    // Subscriber uses its own Context+Executor to process callbacks on a dedicated thread.
+    {
+        let latencies = Arc::new(Mutex::new(Vec::with_capacity(num_threads * msgs_per_thread)));
+        let stop = Arc::new(AtomicBool::new(false));
+
+        let total_msgs = num_threads * msgs_per_thread;
+        let lat_c = Arc::clone(&latencies);
+        let stop_c = Arc::clone(&stop);
+        let sub_handle = std::thread::spawn(move || {
+            let ctx = Context::default_from_env().unwrap();
+            let mut executor = ctx.create_basic_executor();
+            let node = executor.create_node("rust_mn_sub").unwrap();
+            let _sub = node
+                .create_subscription::<example_interfaces::msg::String, _>(
+                    "bench_mn_topic_rust".keep_last(total_msgs as u32).reliable(),
+                    move |msg: example_interfaces::msg::String| {
+                        let recv_ns = now_ns();
+                        if let Ok(sent_ns) = msg.data.parse::<i64>() {
+                            lat_c.lock().unwrap().push(recv_ns - sent_ns);
+                        }
+                    },
+                )
+                .unwrap();
+            while !stop_c.load(Ordering::Relaxed) {
+                executor.spin(SpinOptions::new().timeout(Duration::from_millis(1)));
+            }
+        });
+
+        let pub_ctx = Context::default_from_env().unwrap();
+        let pub_executor = pub_ctx.create_basic_executor();
+        let pub_node = pub_executor.create_node("rust_mn_pub").unwrap();
+        let publishers: Vec<_> = (0..num_threads)
+            .map(|_| {
+                Arc::new(
+                    pub_node
+                        .create_publisher::<example_interfaces::msg::String>(
+                            "bench_mn_topic_rust".keep_last(total_msgs as u32).reliable(),
+                        )
+                        .unwrap(),
+                )
+            })
+            .collect();
+
+        std::thread::sleep(Duration::from_secs(2));
+
+        let start = Instant::now();
+        let mut handles = Vec::new();
+        for i in 0..num_threads {
+            let count = msgs_per_thread;
+            let pub_c = Arc::clone(&publishers[i]);
+            handles.push(std::thread::spawn(move || {
+                for _ in 0..count {
+                    let mut msg = example_interfaces::msg::String::default();
+                    msg.data = now_ns().to_string();
+                    let _ = pub_c.publish(&msg);
+                }
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+        // Wait for subscriber to drain all buffered messages (up to 5s)
+        let drain_start = Instant::now();
+        while drain_start.elapsed() < Duration::from_secs(5) {
+            if latencies.lock().unwrap().len() >= total_msgs {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let elapsed_s = start.elapsed().as_secs_f64();
+
+        stop.store(true, Ordering::Relaxed);
+        sub_handle.join().unwrap();
+
+        let lats = latencies.lock().unwrap();
+        let received = lats.len();
+        let avg_lat = if received > 0 {
+            lats.iter().sum::<i64>() as f64 / received as f64 / 1000.0
+        } else {
+            0.0
+        };
+
+        mn.insert("topic".into(), serde_json::json!({
+            "total_sent": total_msgs,
+            "total_received": received,
+            "elapsed_s": elapsed_s,
+            "aggregate_throughput": received as f64 / elapsed_s,
+            "avg_latency_us": avg_lat,
+        }));
+    }
+
+    // --- Multi-node service: server in own thread, each client in own Context ---
+    {
+        let stop_srv = Arc::new(AtomicBool::new(false));
+        let stop_srv_c = Arc::clone(&stop_srv);
+
+        let srv_handle = std::thread::spawn(move || {
+            let ctx = Context::default_from_env().unwrap();
+            let mut executor = ctx.create_basic_executor();
+            let node = executor.create_node("rust_mn_srv").unwrap();
+            let _server = node
+                .create_service::<AddTwoInts, _>(
+                    "bench_mn_srv_rust",
+                    |req: AddTwoInts_Request, _info: ServiceInfo| AddTwoInts_Response {
+                        sum: req.a + req.b,
+                    },
+                )
+                .unwrap();
+            while !stop_srv_c.load(Ordering::Relaxed) {
+                executor.spin(SpinOptions::new().timeout(Duration::from_millis(1)));
+            }
+        });
+
+        std::thread::sleep(Duration::from_millis(200));
+
+        let call_latencies = Arc::new(Mutex::new(Vec::with_capacity(
+            num_threads * calls_per_thread,
+        )));
+        let total_calls = Arc::new(AtomicUsize::new(0));
+
+        let start = Instant::now();
+        let mut handles = Vec::new();
+        for tid in 0..num_threads {
+            let lat_c = Arc::clone(&call_latencies);
+            let tc = Arc::clone(&total_calls);
+            let cpt = calls_per_thread;
+            handles.push(std::thread::spawn(move || {
+                let ctx = Context::default_from_env().unwrap();
+                let mut executor = ctx.create_basic_executor();
+                let node = executor
+                    .create_node(&format!("rust_mn_cli_{tid}"))
+                    .unwrap();
+                let client = node
+                    .create_client::<AddTwoInts>("bench_mn_srv_rust")
+                    .unwrap();
+                while !client.service_is_ready().unwrap() {
+                    executor.spin(SpinOptions::new().timeout(Duration::from_millis(10)));
+                }
+                for i in 0..cpt {
+                    let ct0 = Instant::now();
+                    let lat_c2 = Arc::clone(&lat_c);
+                    let tc2 = Arc::clone(&tc);
+                    let promise = client
+                        .call_then(
+                            &AddTwoInts_Request {
+                                a: tid as i64,
+                                b: i as i64,
+                            },
+                            move |_resp: AddTwoInts_Response| {
+                                let lat = ct0.elapsed().as_nanos() as i64;
+                                lat_c2.lock().unwrap().push(lat);
+                                tc2.fetch_add(1, Ordering::Relaxed);
+                            },
+                        )
+                        .unwrap();
+                    executor.spin(SpinOptions::new().until_promise_resolved(promise));
+                }
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+        let elapsed_s = start.elapsed().as_secs_f64();
+
+        stop_srv.store(true, Ordering::Relaxed);
+        srv_handle.join().unwrap();
+
+        let lats = call_latencies.lock().unwrap();
+        let done = lats.len();
+        let avg_lat = if done > 0 {
+            lats.iter().sum::<i64>() as f64 / done as f64 / 1000.0
+        } else {
+            0.0
+        };
+
+        mn.insert("service".into(), serde_json::json!({
+            "total_calls": done,
+            "elapsed_s": elapsed_s,
+            "aggregate_throughput": done as f64 / elapsed_s,
+            "avg_latency_us": avg_lat,
+        }));
+    }
+
+    serde_json::Value::Object(mn)
+}
+
 fn main() -> Result<()> {
     let mut topic_iters: usize = 5000;
     let mut service_iters: usize = 2000;
@@ -481,6 +689,8 @@ fn main() -> Result<()> {
     results.insert("param".into(), benchmark_param(param_iters));
     results.insert("concurrency".into(), benchmark_concurrency(
         conc_threads, conc_msgs, conc_calls, conc_param_ops));
+    results.insert("multi_node".into(), benchmark_multi_node(
+        conc_threads, conc_msgs, conc_calls));
 
     println!("{}", serde_json::to_string_pretty(&serde_json::Value::Object(results))?);
     Ok(())

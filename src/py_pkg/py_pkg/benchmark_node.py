@@ -172,18 +172,28 @@ def benchmark_concurrency(num_threads, msgs_per_thread, calls_per_thread,
     conc = {"thread_count": num_threads}
 
     # --- Multi-publisher topic ---
+    total_msgs = num_threads * msgs_per_thread
     node = Node("py_bench_conc_topic")
     latencies = []
     lat_lock = threading.Lock()
+    recv_count = [0]
+
+    from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
+    topic_qos = QoSProfile(
+        history=QoSHistoryPolicy.KEEP_LAST,
+        depth=total_msgs,
+        reliability=QoSReliabilityPolicy.RELIABLE,
+    )
 
     def on_msg(msg):
         now_ns = time.time_ns()
         sent_ns = int(msg.data)
         with lat_lock:
             latencies.append(now_ns - sent_ns)
+            recv_count[0] += 1
 
     cb_group = ReentrantCallbackGroup()
-    node.create_subscription(String, "bench_conc_topic_py", on_msg, 2000,
+    node.create_subscription(String, "bench_conc_topic_py", on_msg, topic_qos,
                              callback_group=cb_group)
 
     executor = MultiThreadedExecutor(num_threads=num_threads + 1)
@@ -192,7 +202,7 @@ def benchmark_concurrency(num_threads, msgs_per_thread, calls_per_thread,
     spin_thread.start()
 
     def pub_worker():
-        pub = node.create_publisher(String, "bench_conc_topic_py", 2000)
+        pub = node.create_publisher(String, "bench_conc_topic_py", topic_qos)
         for _ in range(msgs_per_thread):
             msg = String()
             msg.data = str(time.time_ns())
@@ -203,13 +213,18 @@ def benchmark_concurrency(num_threads, msgs_per_thread, calls_per_thread,
         futs = [pool.submit(pub_worker) for _ in range(num_threads)]
         for f in futs:
             f.result()
-    time.sleep(0.3)
+    drain_start = time.time()
+    while time.time() - drain_start < 5.0:
+        with lat_lock:
+            if recv_count[0] >= total_msgs:
+                break
+        time.sleep(0.01)
     t1 = time.time()
     elapsed = t1 - t0
 
     executor.shutdown()
 
-    total_sent = num_threads * msgs_per_thread
+    total_sent = total_msgs
     received = len(latencies)
     avg_lat = (sum(latencies) / received / 1000.0) if received else 0
     conc["topic_multi_pub"] = {
@@ -314,6 +329,155 @@ def benchmark_concurrency(num_threads, msgs_per_thread, calls_per_thread,
     return conc
 
 
+def benchmark_multi_node(num_threads, msgs_per_thread, calls_per_thread):
+    from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
+    mn = {"thread_count": num_threads}
+    total_msgs = num_threads * msgs_per_thread
+
+    topic_qos = QoSProfile(
+        history=QoSHistoryPolicy.KEEP_LAST,
+        depth=total_msgs,
+        reliability=QoSReliabilityPolicy.RELIABLE,
+    )
+
+    # --- Multi-node topic: each pub thread owns its own node ---
+    latencies = []
+    lat_lock = threading.Lock()
+    recv_count = [0]
+    sub_ready = threading.Event()
+    stop_sub = threading.Event()
+
+    def sub_worker():
+        sub_node = Node("py_mn_sub")
+        sub_executor = SingleThreadedExecutor()
+        sub_executor.add_node(sub_node)
+
+        def on_msg(msg):
+            now_ns = time.time_ns()
+            sent_ns = int(msg.data)
+            with lat_lock:
+                latencies.append(now_ns - sent_ns)
+                recv_count[0] += 1
+
+        sub_node.create_subscription(String, "bench_mn_topic_py", on_msg, topic_qos)
+        sub_ready.set()
+        while not stop_sub.is_set():
+            sub_executor.spin_once(timeout_sec=0.001)
+        sub_node.destroy_node()
+
+    sub_thread = threading.Thread(target=sub_worker, daemon=True)
+    sub_thread.start()
+    sub_ready.wait()
+    time.sleep(0.1)
+
+    def pub_worker(tid):
+        pub_node = Node(f"py_mn_pub_{tid}")
+        pub = pub_node.create_publisher(String, "bench_mn_topic_py", topic_qos)
+        for _ in range(msgs_per_thread):
+            msg = String()
+            msg.data = str(time.time_ns())
+            pub.publish(msg)
+        pub_node.destroy_node()
+
+    t0 = time.time()
+    with ThreadPoolExecutor(max_workers=num_threads) as pool:
+        futs = [pool.submit(pub_worker, t) for t in range(num_threads)]
+        for f in futs:
+            f.result()
+    drain_start = time.time()
+    while time.time() - drain_start < 5.0:
+        with lat_lock:
+            if recv_count[0] >= total_msgs:
+                break
+        time.sleep(0.01)
+    t1 = time.time()
+    elapsed = t1 - t0
+
+    stop_sub.set()
+    sub_thread.join(timeout=2)
+
+    total_sent = total_msgs
+    received = len(latencies)
+    avg_lat = (sum(latencies) / received / 1000.0) if received else 0
+    mn["topic"] = {
+        "total_sent": total_sent,
+        "total_received": received,
+        "elapsed_s": round(elapsed, 4),
+        "aggregate_throughput": round(received / elapsed, 2),
+        "avg_latency_us": round(avg_lat, 2),
+    }
+
+    # --- Multi-node service: server in own thread, each client in own node ---
+    srv_ready = threading.Event()
+    stop_srv = threading.Event()
+
+    def srv_worker():
+        srv_node = Node("py_mn_srv")
+        srv_executor = SingleThreadedExecutor()
+        srv_executor.add_node(srv_node)
+
+        def handle(req, resp):
+            resp.sum = req.a + req.b
+            return resp
+
+        srv_node.create_service(AddTwoInts, "bench_mn_srv_py", handle)
+        srv_ready.set()
+        while not stop_srv.is_set():
+            srv_executor.spin_once(timeout_sec=0.001)
+        srv_node.destroy_node()
+
+    srv_thread = threading.Thread(target=srv_worker, daemon=True)
+    srv_thread.start()
+    srv_ready.wait()
+    time.sleep(0.1)
+
+    call_latencies = []
+    call_lock = threading.Lock()
+    call_count = [0]
+
+    def cli_worker(tid):
+        cli_node = Node(f"py_mn_cli_{tid}")
+        cli_executor = SingleThreadedExecutor()
+        cli_executor.add_node(cli_node)
+        client = cli_node.create_client(AddTwoInts, "bench_mn_srv_py")
+        while not client.wait_for_service(timeout_sec=0.1):
+            cli_executor.spin_once(timeout_sec=0)
+        for i in range(calls_per_thread):
+            req = AddTwoInts.Request()
+            req.a = tid
+            req.b = i
+            ct0 = time.time_ns()
+            future = client.call_async(req)
+            cli_executor.spin_until_future_complete(future, timeout_sec=5.0)
+            ct1 = time.time_ns()
+            with call_lock:
+                call_latencies.append(ct1 - ct0)
+                call_count[0] += 1
+        cli_node.destroy_node()
+
+    t0 = time.time()
+    with ThreadPoolExecutor(max_workers=num_threads) as pool:
+        futs = [pool.submit(cli_worker, t) for t in range(num_threads)]
+        for f in futs:
+            f.result()
+    t1 = time.time()
+    elapsed = t1 - t0
+
+    stop_srv.set()
+    srv_thread.join(timeout=2)
+
+    total_calls = call_count[0]
+    avg_lat = (sum(call_latencies) / total_calls / 1000.0) if total_calls else 0
+    mn["service"] = {
+        "total_calls": total_calls,
+        "elapsed_s": round(elapsed, 4),
+        "aggregate_throughput": round(total_calls / elapsed, 2),
+        "avg_latency_us": round(avg_lat, 2),
+    }
+
+    return mn
+
+
 def main(args=None):
     rclpy.init(args=args)
 
@@ -352,6 +516,8 @@ def main(args=None):
     results["param"] = benchmark_param(param_iters)
     results["concurrency"] = benchmark_concurrency(
         conc_threads, conc_msgs, conc_calls, conc_param_ops)
+    results["multi_node"] = benchmark_multi_node(
+        conc_threads, conc_msgs, conc_calls)
 
     print(json.dumps(results, indent=2))
     rclpy.shutdown()

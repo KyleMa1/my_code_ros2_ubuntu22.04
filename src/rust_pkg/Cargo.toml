@@ -35,6 +35,10 @@ path = "src/bin/param_node.rs"
 name = "benchmark_node"
 path = "src/bin/benchmark_node.rs"
 
+[[bin]]
+name = "multi_node_demo"
+path = "src/bin/multi_node_demo.rs"
+
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }
 rclrs = "0.7"

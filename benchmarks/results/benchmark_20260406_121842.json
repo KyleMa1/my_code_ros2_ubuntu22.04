@@ -1,0 +1,230 @@
+{
+  "cpp": {
+    "language": "cpp",
+    "topic": {
+      "avg_us": 19.1241,
+      "min_us": 11.873,
+      "max_us": 176.903,
+      "p50_us": 17.809,
+      "p95_us": 28.494,
+      "p99_us": 62.925,
+      "throughput": 9080.86
+    },
+    "service": {
+      "avg_us": 35.0347,
+      "min_us": 29.681,
+      "max_us": 143.66,
+      "p50_us": 33.244,
+      "p95_us": 41.555,
+      "p99_us": 51.053,
+      "throughput": 27199.7
+    },
+    "action": {
+      "total_us": 511,
+      "feedback_count": 0,
+      "fib_order": 20
+    },
+    "param": {
+      "write_ops_per_sec": 130686,
+      "read_ops_per_sec": 7148750.0,
+      "iterations": 100000
+    },
+    "concurrency": {
+      "thread_count": 4,
+      "topic_multi_pub": {
+        "total_sent": 4000,
+        "total_received": 4000,
+        "elapsed_s": 0.0473793,
+        "aggregate_throughput": 84425,
+        "avg_latency_us": 23599.6
+      },
+      "service_concurrent": {
+        "total_calls": 400,
+        "elapsed_s": 0.0146925,
+        "aggregate_throughput": 27224.8,
+        "avg_latency_us": 144.141
+      },
+      "param_concurrent_rw": {
+        "total_ops": 40000,
+        "elapsed_s": 0.171128,
+        "aggregate_throughput": 233744
+      }
+    },
+    "multi_node": {
+      "thread_count": 4,
+      "topic": {
+        "total_sent": 4000,
+        "total_received": 4000,
+        "elapsed_s": 0.0463583,
+        "aggregate_throughput": 86284.5,
+        "avg_latency_us": 20025
+      },
+      "service": {
+        "total_calls": 400,
+        "elapsed_s": 0.0102533,
+        "aggregate_throughput": 39011.9,
+        "avg_latency_us": 99.4341
+      }
+    },
+    "wall_time_s": 1.754,
+    "meta": {
+      "source_lines": 886,
+      "source_files": 9,
+      "binary_size": 11057224,
+      "wall_time_s": 1.754,
+      "build_time_s": "skipped"
+    }
+  },
+  "python": {
+    "language": "python",
+    "topic": {
+      "avg_us": 12679.34520117647,
+      "min_us": 208.961,
+      "max_us": 15682.694,
+      "p50_us": 12848.672,
+      "p95_us": 14329.201,
+      "p99_us": 14975.079,
+      "throughput": 3885.4545507386215
+    },
+    "service": {
+      "avg_us": 196.4925575,
+      "min_us": 174.53,
+      "max_us": 422.669,
+      "p50_us": 193.526,
+      "p95_us": 218.458,
+      "p99_us": 250.515,
+      "throughput": 5018.715916875316
+    },
+    "action": {
+      "total_us": 1962.563,
+      "feedback_count": 3,
+      "fib_order": 20
+    },
+    "param": {
+      "write_ops_per_sec": 17694.221880006855,
+      "read_ops_per_sec": 3432383.5087317303,
+      "iterations": 100000
+    },
+    "concurrency": {
+      "thread_count": 4,
+      "topic_multi_pub": {
+        "total_sent": 4000,
+        "total_received": 4000,
+        "elapsed_s": 0.7519,
+        "aggregate_throughput": 5319.94,
+        "avg_latency_us": 373649.58
+      },
+      "service_concurrent": {
+        "total_calls": 400,
+        "elapsed_s": 5.0987,
+        "aggregate_throughput": 78.45,
+        "avg_latency_us": 13347.64
+      },
+      "param_concurrent_rw": {
+        "total_ops": 40000,
+        "elapsed_s": 1.4651,
+        "aggregate_throughput": 27301.29
+      }
+    },
+    "multi_node": {
+      "thread_count": 4,
+      "topic": {
+        "total_sent": 4000,
+        "total_received": 4000,
+        "elapsed_s": 0.3213,
+        "aggregate_throughput": 12450.49,
+        "avg_latency_us": 159850.26
+      },
+      "service": {
+        "total_calls": 400,
+        "elapsed_s": 10.1295,
+        "aggregate_throughput": 39.49,
+        "avg_latency_us": 38877.62
+      }
+    },
+    "wall_time_s": 24.971,
+    "meta": {
+      "source_lines": 758,
+      "source_files": 8,
+      "binary_size": 7720,
+      "wall_time_s": 24.971,
+      "build_time_s": "skipped"
+    }
+  },
+  "rust": {
+    "action": {
+      "feedback_count": 6,
+      "fib_order": 20,
+      "total_us": 762.0
+    },
+    "concurrency": {
+      "param_concurrent_rw": {
+        "aggregate_throughput": 6972399.408322186,
+        "elapsed_s": 0.005736906,
+        "total_ops": 40000
+      },
+      "service_concurrent": {
+        "aggregate_throughput": 6.597920604620584,
+        "avg_latency_us": 165.24687878787879,
+        "elapsed_s": 10.003151592,
+        "total_calls": 66
+      },
+      "thread_count": 4,
+      "topic_multi_pub": {
+        "aggregate_throughput": 54490.02135136997,
+        "avg_latency_us": 23800.429519250003,
+        "elapsed_s": 0.073407936,
+        "total_received": 4000,
+        "total_sent": 4000
+      }
+    },
+    "language": "rust",
+    "multi_node": {
+      "service": {
+        "aggregate_throughput": 11083.174123537048,
+        "avg_latency_us": 153.38685750000002,
+        "elapsed_s": 0.036090744,
+        "total_calls": 400
+      },
+      "thread_count": 4,
+      "topic": {
+        "aggregate_throughput": 37358.90301185141,
+        "avg_latency_us": 33879.78607925,
+        "elapsed_s": 0.107069525,
+        "total_received": 4000,
+        "total_sent": 4000
+      }
+    },
+    "param": {
+      "iterations": 100000,
+      "read_ops_per_sec": 21431701.98789752,
+      "write_ops_per_sec": 15778679.406582803
+    },
+    "service": {
+      "avg_us": 139.21197800000002,
+      "max_us": 765.792,
+      "min_us": 97.356,
+      "p50_us": 134.162,
+      "p95_us": 192.338,
+      "p99_us": 242.204,
+      "throughput": 6080.02512655504
+    },
+    "topic": {
+      "avg_us": 109.9971002,
+      "max_us": 472.534,
+      "min_us": 68.862,
+      "p50_us": 108.042,
+      "p95_us": 149.597,
+      "p99_us": 178.091,
+      "throughput": 4874.308511950265
+    },
+    "wall_time_s": 13.874,
+    "meta": {
+      "source_lines": 1024,
+      "source_files": 9,
+      "binary_size": 378986240,
+      "wall_time_s": 13.874,
+      "build_time_s": "skipped"
+    }
+  }
+}

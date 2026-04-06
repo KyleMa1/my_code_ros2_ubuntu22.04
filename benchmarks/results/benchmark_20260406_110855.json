@@ -1,0 +1,101 @@
+{
+  "cpp": {
+    "language": "cpp",
+    "error": "timeout (300s)",
+    "meta": {
+      "source_lines": 879,
+      "source_files": 9,
+      "binary_size": 11066800,
+      "wall_time_s": "N/A",
+      "build_time_s": "skipped"
+    }
+  },
+  "python": {
+    "language": "python",
+    "error": "The following exception was never retrieved: cannot use Destroyable because destruction was requested\nTraceback (most recent call last):\n  File \"/home/ma/rust_ws/install/py_pkg/lib/py_pkg/benchmark_node\", line 33, in <module>\n    sys.exit(load_entry_point('py-pkg==0.1.0', 'console_scripts', 'benchmark_node')())\n  File \"/home/ma/rust_ws/install/py_pkg/lib/python3.10/site-packages/py_pkg/benchmark_node.py\", line 489, in main\n    results[\"multi_node\"] = benchmark_multi_node(\n  File \"/home/ma/rust_w",
+    "wall_time_s": 8.986900091171265,
+    "meta": {
+      "source_lines": 728,
+      "source_files": 8,
+      "binary_size": 7720,
+      "wall_time_s": 8.986900091171265,
+      "build_time_s": "skipped"
+    }
+  },
+  "rust": {
+    "action": {
+      "feedback_count": 6,
+      "fib_order": 20,
+      "total_us": 531.0
+    },
+    "concurrency": {
+      "param_concurrent_rw": {
+        "aggregate_throughput": 7471328.77582278,
+        "elapsed_s": 0.0053538,
+        "total_ops": 40000
+      },
+      "service_concurrent": {
+        "aggregate_throughput": 6.797385994522991,
+        "avg_latency_us": 182.76625,
+        "elapsed_s": 10.003845604,
+        "total_calls": 68
+      },
+      "thread_count": 4,
+      "topic_multi_pub": {
+        "aggregate_throughput": 1382.54220517422,
+        "avg_latency_us": 65.51398863636364,
+        "elapsed_s": 0.509206878,
+        "total_received": 704,
+        "total_sent": 2000
+      }
+    },
+    "language": "rust",
+    "multi_node": {
+      "service": {
+        "aggregate_throughput": 13140.985659997956,
+        "avg_latency_us": 147.62426000000002,
+        "elapsed_s": 0.030439117,
+        "total_calls": 400
+      },
+      "thread_count": 4,
+      "topic": {
+        "aggregate_throughput": 644.1506655832361,
+        "avg_latency_us": 45.39336526946108,
+        "elapsed_s": 0.518512233,
+        "total_received": 334,
+        "total_sent": 2000
+      }
+    },
+    "param": {
+      "iterations": 10000,
+      "read_ops_per_sec": 30514691.298125483,
+      "write_ops_per_sec": 20245291.957355317
+    },
+    "service": {
+      "avg_us": 104.668244,
+      "max_us": 264.782,
+      "min_us": 75.991,
+      "p50_us": 91.427,
+      "p95_us": 162.669,
+      "p99_us": 203.039,
+      "throughput": 7944.8697227275425
+    },
+    "topic": {
+      "avg_us": 80.473379,
+      "max_us": 241.034,
+      "min_us": 47.494,
+      "p50_us": 77.179,
+      "p95_us": 121.11,
+      "p99_us": 157.919,
+      "throughput": 4360.6777627019455
+    },
+    "wall_time_s": 11.849,
+    "meta": {
+      "source_lines": 996,
+      "source_files": 9,
+      "binary_size": 378855664,
+      "wall_time_s": 11.849,
+      "build_time_s": "skipped"
+    }
+  }
+}

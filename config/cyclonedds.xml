@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CycloneDDS xmlns="https://cdds.io/config"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
+  <Domain id="any">
+
+    <General>
+      <!-- 仅使用 loopback，排除外部网络干扰，适合本机 benchmark -->
+      <Interfaces>
+        <NetworkInterface name="lo" multicast="true" />
+      </Interfaces>
+      <AllowMulticast>spdp</AllowMulticast>
+      <MaxMessageSize>65500B</MaxMessageSize>
+      <FragmentSize>4000B</FragmentSize>
+    </General>
+
+    <Internal>
+      <!-- 增大 socket 接收缓冲区（受内核 rmem_max 限制） -->
+      <SocketReceiveBufferSize min="1MB" />
+      <SocketSendBufferSize min="1MB" />
+
+      <!-- 写入历史缓存高水位，避免 reliable 模式下的背压 -->
+      <Watermarks>
+        <WhcHigh>500kB</WhcHigh>
+      </Watermarks>
+
+      <!-- 加快数据发送节奏 -->
+      <WriterLingerDuration>0ms</WriterLingerDuration>
+
+      <!-- Nack 响应延迟 — 越小越快重传 -->
+      <NackDelay>0ms</NackDelay>
+      <PreEmptiveAckDelay>0ms</PreEmptiveAckDelay>
+
+      <!-- 启用多线程收包 -->
+      <MultipleReceiveThreads>true</MultipleReceiveThreads>
+    </Internal>
+
+    <!-- 加快参与者发现速度 -->
+    <Discovery>
+      <ParticipantIndex>auto</ParticipantIndex>
+      <MaxAutoParticipantIndex>100</MaxAutoParticipantIndex>
+    </Discovery>
+
+    <Tracing>
+      <Verbosity>warning</Verbosity>
+    </Tracing>
+
+  </Domain>
+</CycloneDDS>

@@ -217,19 +217,22 @@ void benchmark_concurrency(int num_threads, int msgs_per_thread,
 
     // --- Multi-publisher topic ---
     {
+        int total_msgs = num_threads * msgs_per_thread;
         auto node = rclcpp::Node::make_shared("cpp_bench_conc_topic");
         std::mutex lat_mutex;
+        std::atomic<int> recv_count{0};
         std::vector<int64_t> latencies;
-        latencies.reserve(num_threads * msgs_per_thread);
+        latencies.reserve(total_msgs);
 
         auto sub = node->create_subscription<std_msgs::msg::String>(
-            "bench_conc_topic_cpp", rclcpp::QoS(2000),
+            "bench_conc_topic_cpp", rclcpp::QoS(total_msgs).reliable(),
             [&](const std_msgs::msg::String::SharedPtr msg) {
                 auto now_ns = duration_cast<nanoseconds>(
                     high_resolution_clock::now().time_since_epoch()).count();
                 auto sent_ns = std::stoll(msg->data);
                 std::lock_guard<std::mutex> lk(lat_mutex);
                 latencies.push_back(now_ns - sent_ns);
+                recv_count.fetch_add(1);
             });
 
         auto executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
@@ -239,9 +242,9 @@ void benchmark_concurrency(int num_threads, int msgs_per_thread,
         std::vector<std::thread> workers;
         auto t0 = high_resolution_clock::now();
         for (int t = 0; t < num_threads; ++t) {
-            workers.emplace_back([&node, msgs_per_thread]() {
+            workers.emplace_back([&node, msgs_per_thread, total_msgs]() {
                 auto pub = node->create_publisher<std_msgs::msg::String>(
-                    "bench_conc_topic_cpp", rclcpp::QoS(2000));
+                    "bench_conc_topic_cpp", rclcpp::QoS(total_msgs).reliable());
                 for (int i = 0; i < msgs_per_thread; ++i) {
                     auto msg = std_msgs::msg::String();
                     msg.data = std::to_string(duration_cast<nanoseconds>(
@@ -251,7 +254,12 @@ void benchmark_concurrency(int num_threads, int msgs_per_thread,
             });
         }
         for (auto& w : workers) w.join();
-        std::this_thread::sleep_for(milliseconds(300));
+        // Wait for subscriber to drain all buffered messages (up to 5s)
+        auto drain_start = high_resolution_clock::now();
+        while (duration<double>(high_resolution_clock::now() - drain_start).count() < 5.0) {
+            if (recv_count.load() >= total_msgs) break;
+            std::this_thread::sleep_for(milliseconds(10));
+        }
         auto t1 = high_resolution_clock::now();
         double elapsed_s = duration<double>(t1 - t0).count();
 
@@ -366,6 +374,149 @@ void benchmark_concurrency(int num_threads, int msgs_per_thread,
     std::cout << "}";
 }
 
+void benchmark_multi_node(int num_threads, int msgs_per_thread, int calls_per_thread) {
+    // C++ uses MultiThreadedExecutor on a single node — the idiomatic high-concurrency
+    // approach. The "multi-node" naming aligns with the cross-language comparison:
+    // Rust needs truly separate nodes/contexts to bypass BasicExecutor.
+    auto node = rclcpp::Node::make_shared("cpp_mn_node");
+    auto executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
+    executor->add_node(node);
+
+    std::cout << "  \"multi_node\": {\"thread_count\": " << num_threads;
+
+    // --- Topic: N publisher threads, 1 subscriber ---
+    {
+        int total_msgs = num_threads * msgs_per_thread;
+        std::mutex lat_mutex;
+        std::atomic<int> recv_count{0};
+        std::vector<int64_t> latencies;
+        latencies.reserve(total_msgs);
+
+        auto sub = node->create_subscription<std_msgs::msg::String>(
+            "bench_mn_topic_cpp", rclcpp::QoS(total_msgs).reliable(),
+            [&](const std_msgs::msg::String::SharedPtr msg) {
+                auto now_ns = duration_cast<nanoseconds>(
+                    high_resolution_clock::now().time_since_epoch()).count();
+                auto sent_ns = std::stoll(msg->data);
+                std::lock_guard<std::mutex> lk(lat_mutex);
+                latencies.push_back(now_ns - sent_ns);
+                recv_count.fetch_add(1);
+            });
+
+        std::atomic<bool> stop_spin{false};
+        std::thread spin_thread([&executor, &stop_spin]() {
+            while (!stop_spin.load()) {
+                executor->spin_some(milliseconds(1));
+            }
+        });
+
+        auto t0 = high_resolution_clock::now();
+        std::vector<std::thread> workers;
+        for (int t = 0; t < num_threads; ++t) {
+            workers.emplace_back([&node, msgs_per_thread, total_msgs]() {
+                auto pub = node->create_publisher<std_msgs::msg::String>(
+                    "bench_mn_topic_cpp", rclcpp::QoS(total_msgs).reliable());
+                for (int i = 0; i < msgs_per_thread; ++i) {
+                    auto msg = std_msgs::msg::String();
+                    msg.data = std::to_string(duration_cast<nanoseconds>(
+                        high_resolution_clock::now().time_since_epoch()).count());
+                    pub->publish(msg);
+                }
+            });
+        }
+        for (auto& w : workers) w.join();
+        auto drain_start = high_resolution_clock::now();
+        while (duration<double>(high_resolution_clock::now() - drain_start).count() < 5.0) {
+            if (recv_count.load() >= total_msgs) break;
+            std::this_thread::sleep_for(milliseconds(10));
+        }
+        auto t1 = high_resolution_clock::now();
+        double elapsed_s = duration<double>(t1 - t0).count();
+
+        stop_spin.store(true);
+        spin_thread.join();
+
+        size_t received = latencies.size();
+        double avg_lat = 0;
+        if (!latencies.empty()) {
+            double sum = std::accumulate(latencies.begin(), latencies.end(), 0.0);
+            avg_lat = sum / latencies.size() / 1000.0;
+        }
+        std::cout << ", \"topic\": {"
+                  << "\"total_sent\": " << num_threads * msgs_per_thread
+                  << ", \"total_received\": " << received
+                  << ", \"elapsed_s\": " << elapsed_s
+                  << ", \"aggregate_throughput\": " << received / elapsed_s
+                  << ", \"avg_latency_us\": " << avg_lat << "}";
+    }
+
+    // --- Service: N client threads + 1 server ---
+    {
+        auto srv = node->create_service<example_interfaces::srv::AddTwoInts>(
+            "bench_mn_srv_cpp",
+            [](const example_interfaces::srv::AddTwoInts::Request::SharedPtr req,
+               example_interfaces::srv::AddTwoInts::Response::SharedPtr resp) {
+                resp->sum = req->a + req->b;
+            });
+
+        auto client = node->create_client<example_interfaces::srv::AddTwoInts>("bench_mn_srv_cpp");
+
+        std::atomic<bool> stop_spin{false};
+        std::thread spin_thread([&executor, &stop_spin]() {
+            while (!stop_spin.load()) {
+                executor->spin_some(milliseconds(1));
+            }
+        });
+
+        while (!client->wait_for_service(seconds(1))) {}
+
+        std::mutex lat_mutex;
+        std::vector<int64_t> latencies;
+        latencies.reserve(num_threads * calls_per_thread);
+        std::atomic<int64_t> total_calls{0};
+
+        auto t0 = high_resolution_clock::now();
+        std::vector<std::thread> workers;
+        for (int t = 0; t < num_threads; ++t) {
+            workers.emplace_back([&, t, calls_per_thread]() {
+                for (int i = 0; i < calls_per_thread; ++i) {
+                    auto req = std::make_shared<example_interfaces::srv::AddTwoInts::Request>();
+                    req->a = t;
+                    req->b = i;
+                    auto ct0 = high_resolution_clock::now();
+                    auto future = client->async_send_request(req);
+                    if (future.wait_for(seconds(2)) == std::future_status::ready) {
+                        auto ct1 = high_resolution_clock::now();
+                        auto lat = duration_cast<nanoseconds>(ct1 - ct0).count();
+                        std::lock_guard<std::mutex> lk(lat_mutex);
+                        latencies.push_back(lat);
+                        total_calls.fetch_add(1);
+                    }
+                }
+            });
+        }
+        for (auto& w : workers) w.join();
+        auto t1 = high_resolution_clock::now();
+        double elapsed_s = duration<double>(t1 - t0).count();
+
+        stop_spin.store(true);
+        spin_thread.join();
+
+        double avg_lat = 0;
+        if (!latencies.empty()) {
+            double sum = std::accumulate(latencies.begin(), latencies.end(), 0.0);
+            avg_lat = sum / latencies.size() / 1000.0;
+        }
+        std::cout << ", \"service\": {"
+                  << "\"total_calls\": " << total_calls.load()
+                  << ", \"elapsed_s\": " << elapsed_s
+                  << ", \"aggregate_throughput\": " << total_calls.load() / elapsed_s
+                  << ", \"avg_latency_us\": " << avg_lat << "}";
+    }
+
+    std::cout << "}";
+}
+
 int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
 
@@ -415,6 +566,9 @@ int main(int argc, char* argv[]) {
     }
 
     benchmark_concurrency(conc_threads, conc_msgs, conc_calls, conc_param_ops);
+    std::cout << "," << std::endl;
+
+    benchmark_multi_node(conc_threads, conc_msgs, conc_calls);
     std::cout << std::endl;
 
     std::cout << "}" << std::endl;
